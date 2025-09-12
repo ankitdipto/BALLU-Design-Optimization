@@ -1,0 +1,9 @@
+[submodule "ballu_isclb_extension"]
+	path = ballu_isclb_extension
+	url = https://github.com/ankitdipto/BALLU_IsaacLab_Extension.git
+[submodule "isaac_lab"]
+	path = isaac_lab
+	url = https://github.com/ankitdipto/IsaacLab.git
+[submodule "rsl_rl_lib"]
+	path = rsl_rl_lib
+	url = https://github.com/ankitdipto/rsl_rl.git
