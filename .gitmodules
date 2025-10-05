@@ -7,3 +7,6 @@
 [submodule "rsl_rl_lib"]
 	path = rsl_rl_lib
 	url = https://github.com/ankitdipto/rsl_rl.git
+[submodule "optuna"]
+	path = optuna
+	url = https://github.com/optuna/optuna.git
