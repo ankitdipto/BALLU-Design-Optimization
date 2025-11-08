@@ -1,0 +1,21 @@
+# MuJoCo Project Requirements
+# Python 3.10+
+
+# Core MuJoCo
+mujoco>=3.3.7
+mujoco-python-viewer>=0.1.4
+
+# Numerical computing
+numpy>=1.24.0
+
+# Video and image processing
+imageio>=2.30.0
+imageio-ffmpeg>=0.6.0
+
+# OpenGL rendering
+pyopengl>=3.1.7
+PyOpenGL-accelerate>=3.1.7
+
+# Additional utilities
+pyyaml>=6.0
+

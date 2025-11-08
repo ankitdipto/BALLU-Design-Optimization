@@ -1,0 +1,38 @@
+<mujoco model="cartpole">
+  <option timestep="0.01" gravity="0 0 -9.81"/>
+  
+  <visual>
+    <global offwidth="640" offheight="480"/>
+    <quality shadowsize="4096"/>
+    <map force="0.1" znear="0.01"/>
+  </visual>
+  
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance=".2"/>
+  </asset>
+
+  <worldbody>
+    <light diffuse=".5 .5 .5" pos="0 0 3" dir="0 0 -1"/>
+    <geom type="plane" size="1 1 0.1" rgba=".9 .9 .9 1" material="grid"/>
+    
+    <camera name="fixed" pos="2 -1.5 1" xyaxes="0.5 0.866 0 -0.433 0.25 0.866"/>
+    <camera name="tracking" mode="trackcom" pos="0 -2 0.5" xyaxes="1 0 0 0 0.5 1"/>
+    
+    <body name="cart" pos="0 0 0.2">
+      <joint name="slider" type="slide" axis="1 0 0" limited="true" range="-1 1"/>
+      <geom name="cart" type="box" size="0.15 0.1 0.05" rgba="0.8 0.2 0.2 1" mass="1"/>
+      
+      <body name="pole" pos="0 0 0">
+        <joint name="hinge" type="hinge" axis="0 1 0"/>
+        <geom name="pole" type="capsule" fromto="0 0 0 0 0 0.5" size="0.03" rgba="0.2 0.8 0.2 1" mass="0.3"/>
+        <geom name="pole_tip" type="sphere" pos="0 0 0.5" size="0.05" rgba="0.2 0.2 0.8 1" mass="0.1"/>
+      </body>
+    </body>
+  </worldbody>
+  
+  <actuator>
+    <motor joint="slider" name="slide" gear="100" ctrllimited="true" ctrlrange="-1 1"/>
+  </actuator>
+</mujoco>
+
