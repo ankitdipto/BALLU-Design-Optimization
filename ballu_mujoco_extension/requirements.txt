@@ -11,10 +11,14 @@ numpy>=1.24.0
 # Video and image processing
 imageio>=2.30.0
 imageio-ffmpeg>=0.6.0
+opencv-python>=4.8.0
 
 # OpenGL rendering
 pyopengl>=3.1.7
 PyOpenGL-accelerate>=3.1.7
+
+# Web streaming
+flask>=3.0.0
 
 # Additional utilities
 pyyaml>=6.0
