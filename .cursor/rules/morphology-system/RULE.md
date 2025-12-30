@@ -1,0 +1,409 @@
+---
+description: "BALLU morphology configuration, generation, and exploration system for systematic design space exploration"
+globs:
+  - "**/morphology/**/*.py"
+  - "**/ballu_assets/**/*.py"
+  - "**/scripts/morphology_utils/**/*.py"
+alwaysApply: false
+---
+
+# BALLU Morphology System
+
+System for systematic exploration of BALLU's physical design space.
+
+## Components
+
+1. **Morphology Configuration** - Parameter space definition
+2. **URDF Generation** - Auto-generate URDFs from configs
+3. **USD Conversion** - Convert to Isaac Sim format
+4. **Morphology Loader** - Load at runtime
+5. **Exploration Tools** - Batch generation and optimization
+
+## Parameter Space
+
+### Geometric Parameters
+
+```python
+femur_length: 0.365 m        # Upper leg
+tibia_length: 0.385 m        # Lower leg
+limb_radius: 0.005 m         # Leg cylinder
+hip_width: 0.116 m           # Hip spacing
+balloon_radius: 0.32 m       # Buoyancy cylinder
+balloon_height: 0.70 m       # Cylinder height
+```
+
+### Mass Parameters
+
+```python
+pelvis_mass: 0.021 kg        # Main body
+femur_mass: 0.009 kg         # Per leg
+tibia_mass: 0.044 kg         # Per leg
+balloon_mass: 0.159 kg       # Net buoyancy
+```
+
+**Total robot mass**: ~0.30 kg
+
+### Joint Parameters
+
+```python
+hip_limits: [-90°, +90°]
+knee_limits: [0°, 100°]
+motor_limits: [0°, 180°]
+```
+
+### Derived Properties
+
+```python
+total_leg_length = femur_length + tibia_length
+femur_to_limb_ratio = femur_length / total_leg_length
+balloon_mass_ratio = balloon_mass / total_mass
+```
+
+## Quick Start Examples
+
+See @examples/morphology_examples.py for complete code.
+
+### Create Default Morphology
+
+```python
+from ballu_morphology_config import BalluMorphology
+
+# From original URDF defaults
+morph = BalluMorphology.default()
+print(morph)
+```
+
+### Create Custom Morphology
+
+```python
+from ballu_morphology_config import BalluMorphology, GeometryParams
+
+morph = BalluMorphology(
+    morphology_id="long_legs_v1",
+    description="BALLU with longer legs",
+    geometry=GeometryParams(
+        femur_length=0.45,
+        tibia_length=0.45,
+    )
+)
+
+# Validate
+is_valid, errors = morph.validate()
+```
+
+### Create Variants
+
+```python
+from ballu_morphology_config import create_morphology_variant
+
+# By femur-to-limb ratio
+morph = create_morphology_variant(
+    morphology_id="fl_ratio_0.40",
+    femur_to_limb_ratio=0.40,
+)
+
+# By total leg length
+morph = create_morphology_variant(
+    morphology_id="long_legs_0.9m",
+    total_leg_length=0.9,
+)
+
+# By balloon properties
+morph = create_morphology_variant(
+    morphology_id="big_balloon",
+    balloon_radius=0.4,
+    balloon_mass=0.25,
+)
+```
+
+## Validation Rules
+
+```python
+# Geometric constraints
+femur_length, tibia_length > 0
+total_leg_length ∈ [0.1, 2.0]
+femur_to_limb_ratio ∈ [0.1, 0.9]
+
+# Mass constraints
+all masses > 0
+balloon_mass_ratio ∈ [0.1, 0.9]
+
+# Joint constraints
+lower < upper for all joints
+initial_position ∈ [lower, upper]
+
+# Ground clearance
+initial_pose has positive clearance
+```
+
+## Saving and Loading
+
+```python
+# Save to JSON
+morph.to_json("morphologies/my_morphology.json")
+
+# Load from JSON
+morph = BalluMorphology.from_json("morphologies/my_morphology.json")
+
+# Dictionary format
+morph_dict = morph.to_dict()
+morph = BalluMorphology.from_dict(morph_dict)
+```
+
+## URDF Generation
+
+```python
+from ballu_morphology_config import create_morphology_variant
+from robot_generator import BalluURDFGenerator
+
+# Create morphology
+morph = create_morphology_variant(
+    morphology_id="long_legs_0.9m",
+    total_leg_length=0.9,
+)
+
+# Generate URDF
+generator = BalluURDFGenerator(morph)
+urdf_path = generator.generate_urdf("output.urdf")
+```
+
+### Convert to USD
+
+```bash
+python morphology/convert_urdf.py \
+    output.urdf output.usd \
+    --merge-joints \
+    --headless
+```
+
+## Morphology Library
+
+### Batch Generation
+
+```python
+# Generate variants
+morphologies = []
+for ratio in [0.35, 0.40, 0.45, 0.50, 0.55, 0.60]:
+    morph = create_morphology_variant(
+        morphology_id=f"fl_ratio_{ratio:.2f}",
+        femur_to_limb_ratio=ratio,
+    )
+    morphologies.append(morph)
+
+# Save library
+generate_library(morphologies, output_dir="morphology_library")
+```
+
+### Library Structure
+
+```
+morphology_library/
+├── fl_ratio_0.35/
+│   ├── morphology.json
+│   ├── robot.urdf
+│   └── robot.usd
+├── fl_ratio_0.40/
+└── ...
+```
+
+## Runtime Loading
+
+### In Environment Configuration
+
+```python
+from ballu_isaac_extension.ballu_assets.morphology_loader import MorphologyLoaderCfg
+
+@configclass
+class HeteroSceneCfg(InteractiveSceneCfg):
+    robot = MorphologyLoaderCfg(
+        morphology_dir="morphology_library",
+        sample_strategy="random",        # or "sequential", "uniform"
+        per_env_morphology=True,         # Different per env
+        prim_path="{ENV_REGEX_NS}/Robot"
+    )
+```
+
+### Manual Loading
+
+```python
+from ballu_isaac_extension.ballu_assets.morphology_loader import load_morphology
+
+# Load specific morphology
+morph = load_morphology("morphology_library/fl_ratio_0.40")
+
+# Use in environment
+robot_cfg = ArticulationCfg(
+    spawn=UsdFileCfg(usd_path=morph.usd_path),
+    ...
+)
+```
+
+## Morphology Exploration
+
+### Random Sampling
+
+```python
+from ballu_morphology_config import MorphologyParameterRanges
+
+ranges = MorphologyParameterRanges()
+
+# Sample random
+morph = create_morphology_variant(
+    morphology_id=f"random_{i:03d}",
+    femur_length=ranges.sample_uniform('femur_length'),
+    tibia_length=ranges.sample_uniform('tibia_length'),
+    balloon_mass=ranges.sample_uniform('balloon_mass'),
+)
+```
+
+### Grid Search
+
+```python
+# Systematic exploration
+for femur_ratio in [0.35, 0.40, 0.45, 0.50]:
+    for leg_length in [0.7, 0.75, 0.8, 0.85]:
+        morph = create_morphology_variant(
+            morphology_id=f"fl_{femur_ratio}_len_{leg_length}",
+            femur_to_limb_ratio=femur_ratio,
+            total_leg_length=leg_length,
+        )
+        # Train and evaluate
+```
+
+### CMA-ES Optimization
+
+```python
+from scripts.morphology_utils.explore_morphology_cmaes import optimize_morphology
+
+# Optimize for task performance
+best_morph = optimize_morphology(
+    task="Isaac-Vel-BALLU-1-obstacle",
+    initial_params=[0.365, 0.385, 0.159],
+    num_iterations=100,
+)
+```
+
+## Heterogeneous Training (Universal Controllers)
+
+### Environment Setup
+
+```python
+@configclass
+class HeteroEnvCfg(ManagerBasedRLEnvCfg):
+    scene: HeteroSceneCfg = HeteroSceneCfg(
+        num_envs=4096,
+        morphology_dir="morphology_library",
+    )
+    
+    observations: HeteroObsCfg = HeteroObsCfg()  # Include morph params
+
+@configclass
+class HeteroObsCfg:
+    @configclass
+    class PolicyCfg(ObsGroup):
+        velocity_commands = ObsTerm(...)
+        joint_pos = ObsTerm(...)
+        
+        # Add morphology parameters
+        morphology_params = ObsTerm(
+            func=mdp.morphology_parameters,
+            params={"normalize": True}
+        )
+```
+
+### Training
+
+```bash
+python scripts/rsl_rl/train.py \
+    --task Isc-BALLU-hetero-general \
+    --num_envs 4096 \
+    --max_iterations 5000
+```
+
+### Evaluation
+
+```bash
+python scripts/analysis/evaluate_univctrl_pretrained.py \
+    --task Isc-BALLU-hetero-general \
+    --checkpoint model_best.pt \
+    --num_morphologies 50
+```
+
+## Parameter Ranges
+
+```python
+# Geometry
+femur_length: (0.2, 0.6, 0.365)       # (min, max, default)
+tibia_length: (0.2, 0.6, 0.385)
+balloon_radius: (0.2, 0.5, 0.32)
+balloon_height: (0.4, 1.0, 0.70)
+
+# Mass
+balloon_mass: (0.05, 0.40, 0.159)
+
+# Derived
+total_leg_length: (0.5, 1.0, 0.75)
+femur_to_limb_ratio: (0.3, 0.7, 0.49)
+```
+
+## Task-Specific Morphologies
+
+```python
+# High obstacle clearance
+obstacle_morph = create_morphology_variant(
+    morphology_id="high_obstacles",
+    total_leg_length=0.9,
+    femur_to_limb_ratio=0.55,
+    balloon_mass=0.22,
+)
+
+# Speed optimization
+speed_morph = create_morphology_variant(
+    morphology_id="speed_optimized",
+    total_leg_length=0.8,
+    limb_radius=0.003,
+    tibia_mass=0.03,
+)
+```
+
+## Troubleshooting
+
+### Invalid Morphology
+
+```
+Error: Validation failed - total_leg_length out of range
+```
+
+**Fix:** Check parameter ranges in `MorphologyParameterRanges`
+
+### URDF Generation Failed
+
+```
+Error: Cannot generate URDF
+```
+
+**Fix:** Verify all parameters validated
+
+### USD Conversion Error
+
+```
+Error: Failed to import URDF
+```
+
+**Fix:** Check URDF is well-formed, use `--merge-joints`
+
+## Best Practices
+
+1. ✅ Always validate morphologies before generation
+2. ✅ Document what each variant represents
+3. ✅ Version control morphology library (JSON files)
+4. ✅ Test each morphology in simulation
+5. ✅ Track performance metrics per morphology
+6. ✅ Use meaningful IDs
+
+## Additional Resources
+
+- Morphology README: `source/.../morphology/README.md`
+- Parameter ranges: `morphology/ballu_morphology_config.py`
+- Generation tools: `scripts/morphology_utils/`
+- Examples: @examples/morphology_examples.py
