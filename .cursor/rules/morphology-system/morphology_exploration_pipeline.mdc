@@ -1,5 +1,5 @@
 ---
-description: "BALLU morphology configuration, generation, and exploration system for systematic design space exploration"
+description: BALLU morphology configuration, generation, and exploration system for systematic design space exploration
 globs:
   - "**/morphology/**/*.py"
   - "**/ballu_assets/**/*.py"

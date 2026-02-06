@@ -1,9 +1,7 @@
 ---
-description: "Understanding BALLU training pipeline: code flow, managers, physics simulation, and PPO training loop"
-globs:
+description: This rule contains information about the training pipeline
 alwaysApply: false
 ---
-
 # BALLU Training System Architecture
 
 For detailed step-by-step workflow, see: `scripts/rsl_rl/TRAINING_WORKFLOW.md`
@@ -16,7 +14,7 @@ Runner Creation → Training Loop → Environment Step → PPO Update
 ```
 
 ### Code Flow Diagram
-See @diagrams/training-flow.md for visual representation.
+See @training-system/training-flow.md for visual representation.
 
 ## Entry Point
 

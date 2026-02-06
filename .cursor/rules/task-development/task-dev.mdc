@@ -1,12 +1,8 @@
 ---
-description: "Step-by-step guide for creating and registering new BALLU tasks and environments"
-globs:
-  - "**/tasks/ballu_locomotion/__init__.py"
-  - "**/tasks/ballu_locomotion/*_env_cfg.py"
-  - "**/tasks/ballu_locomotion/mdp/**/*.py"
+globs: **/tasks/ballu_locomotion/*
+description: This rule contains information about the task development pipeline
 alwaysApply: false
 ---
-
 # Task Development Guide
 
 For creating new BALLU tasks and environments.
@@ -20,7 +16,7 @@ Every BALLU task requires:
 
 ## Step 1: Create Environment Configuration
 
-Use @templates/observation_template.py, @templates/reward_template.py as starting point.
+Use @task-development/templates/observation_template.py, @task-development/templates/reward_template.py as starting point.
 
 Create `tasks/ballu_locomotion/my_task_env_cfg.py`:
 
@@ -215,7 +211,7 @@ privileged_observations = [
 
 ## Adding Custom MDP Terms
 
-See @templates/ for reward, observation, and termination templates.
+See @task-development/templates/ for reward, observation, and termination templates.
 
 ### Custom Reward
 
@@ -304,7 +300,7 @@ When creating a new task:
 
 ## Additional Resources
 
-- Environment templates: @templates/
+- Environment templates: @task-development/templates/
 - Isaac Lab Managers: https://isaac-sim.github.io/IsaacLab/main/source/api/lab/isaaclab.managers.html
 - Training workflow: `scripts/rsl_rl/TRAINING_WORKFLOW.md`
 - Existing tasks: `tasks/ballu_locomotion/*_env_cfg.py`
