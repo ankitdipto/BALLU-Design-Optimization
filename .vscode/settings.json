@@ -14,6 +14,6 @@
         "terminal.ansiYellow": "#ffc107",
         "terminal.ansiBrightYellow": "#c7be88"
     },
-    "editor.fontSize": 11,
+    "editor.fontSize": 11.2,
     "terminal.integrated.fontSize": 12,
 }
