@@ -16,4 +16,17 @@
     },
     "editor.fontSize": 11.2,
     "terminal.integrated.fontSize": 12,
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/isaac_lab",
+        "${workspaceFolder}/isaac_lab/packages",
+        "${workspaceFolder}/isaac_lab/modules",
+        "./isaac_lab/source/isaaclab",
+        "./isaac_lab/source/isaaclab_tasks",
+        "./isaac_lab/source/isaaclab_rl",
+        "./ballu_isclb_extension/source/ballu_isaac_extension/ballu_isaac_extension",
+        "./rsl_rl_lib",
+        "./optuna"
+    ],
 }
