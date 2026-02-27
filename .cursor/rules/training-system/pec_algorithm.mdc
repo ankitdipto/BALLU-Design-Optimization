@@ -1,0 +1,181 @@
+---
+description: Progressive Expert Coverage (PEC) — algorithm design, shared state schema, script roles, and implementation conventions for the BALLU PEC pipeline.
+globs: ballu_isclb_extension/scripts/pec/**
+alwaysApply: false
+---
+
+# Progressive Expert Coverage (PEC)
+
+PEC trains K specialist PPO policies, each owning a Gaussian region of the
+**GCR × spcf** morphology design space. Routing at deployment is purely
+geometric (nearest Gaussian centre). No MoE learned gate is used.
+
+Design-space dimensions:
+- **GCR** (Gravity Compensation Ratio): `[0.75, 0.89]`
+- **spcf** (Spring Coefficient): `[0.001, 0.010]`
+
+Kinematic parameters (femur/tibia lengths) are **not** partitioned.
+
+---
+
+## Algorithm Structure
+
+```
+INIT     pec_init.py
+           seed K Gaussians, assign N_init designs per expert
+           write pec_state.json
+
+LOOP
+  STEP 1  pec_train_expert.py  ×K
+            sample GCR/spcf from expert's Gaussian → .npy files
+            call train.py subprocess (warm-start from checkpoint)
+            parse EXP_DIR: from stdout → store checkpoint in state
+
+  STEP 2  pec_evaluate_frontier.py
+            sample F frontier/border candidates
+            one subprocess per expert → pec_eval_expert_frontier.py
+            each subprocess runs F designs in parallel envs
+            record final curriculum level per design per expert
+
+  STEP 3  pec_refit_gaussians.py
+            snapshot current Gaussians to state["history"]
+            argmax-assign each frontier design to winning expert
+            MLE refit mu + diagonal covariance (variance floor applied)
+            increment iteration, save pec_state.json
+```
+
+---
+
+## Shared State — `pec_state.json`
+
+Central source of truth. All scripts read/write this file.
+
+```jsonc
+{
+  "run_name":     "my_run",
+  "iteration":    3,
+  "usd_rel_path": "morphologies/.../robot.usd",     // injected as BALLU_USD_REL_PATH
+  "design_space": { "GCR": [0.75, 0.89], "spcf": [0.001, 0.010] },
+  "experts": [
+    {
+      "id": 0,
+      "mu": [0.79, 0.0035],
+      "sigma": [[var_gcr, 0.0], [0.0, var_spcf]],   // diagonal covariance
+      "designs": [[gcr, spcf], ...],                 // all assigned designs
+      "trained": true,
+      "checkpoint": "/abs/path/to/model_best.pt"
+    }
+  ],
+  "history": [                                       // one snapshot per iteration
+    {
+      "iteration": 2,
+      "experts_snapshot": [{ "id": 0, "mu": [...], "sigma": [...],
+                             "checkpoint": "...", "n_designs": 42 }]
+    }
+  ]
+}
+```
+
+Key invariants:
+- `designs` stores `[GCR, spcf]` pairs (not dicts) — access as `d[0]`, `d[1]`.
+- `checkpoint` holds the **absolute** path to `model_best.pt`.
+- `history` is append-only; `pec_refit_gaussians.py` writes the snapshot
+  **before** overwriting `mu`/`sigma`.
+
+---
+
+## Script Roles and CLI Conventions
+
+| Script | Step | Key args |
+|--------|------|----------|
+| `pec_init.py` | 0 — Bootstrap | `--run_name`, `--K`, `--GCR_range`, `--spcf_range`, `--sigma_scale`, `--centers`, `--usd_rel_path` |
+| `pec_train_expert.py` | 1 — Train | `--run_name`, `--expert_id`, `--max_iterations`, `--num_envs`, `--dl` |
+| `pec_evaluate_frontier.py` | 2 — Orchestrate eval | `--run_name`, `--F`, `--sampling_mode`, `--num_episodes` |
+| `pec_eval_expert_frontier.py` | 2 — Isaac subprocess | `--checkpoint_path`, `--frontier_file`, `--output` |
+| `pec_refit_gaussians.py` | 3 — Refit | `--run_name`, `--min_var_scale` |
+| `pec_visualize.py` | Any — Plot | `--run_name`, `--itr`, `--no_frontier`, `--no_2sigma` |
+| `plot_comparison.py` | Post-eval — Compare | `--baseline`, `--experts`, `--pec_state` |
+
+All orchestrator scripts (Steps 1–3) inject `BALLU_USD_REL_PATH` into Isaac Sim
+subprocesses from `state["usd_rel_path"]`. Never pass it manually.
+
+---
+
+## Per-Environment GCR/spcf Parameterisation
+
+PEC requires a different (GCR, spcf) per parallel environment:
+
+- `pec_train_expert.py` writes per-env samples to `.npy` files and passes
+  `--GCR_samples_file` / `--spcf_samples_file` to `train.py`.
+- `train.py` loads these arrays and forwards them to `gym.make()` as
+  `GCR_values=` / `spcf_values=` kwargs.
+- `ManagerBasedRLEnv.__init__` stores them as `self.GCR_values` / `self.spcf_values`.
+- `morphology_vector_priv()` in `observations.py` reads them with priority:
+  `GCR_values` (per-env list) > `GCR_range` (uniform) > `GCR` (scalar).
+
+Do **not** revert to uniform `GCR_range` sampling when per-env values are needed.
+
+---
+
+## Warm-Starting
+
+On every training run after iteration 0, `pec_train_expert.py` passes
+`--resume_path <checkpoint>` to `train.py` to continue from the expert's last
+checkpoint. The `experiment_name` is intentionally **not** overridden in the
+subprocess call — it is taken from `rsl_rl_ppo_cfg.py` so that runs are
+organised by lab-meeting date automatically.
+
+---
+
+## Frontier Sampling Modes
+
+| Mode | When to use | Behaviour |
+|------|-------------|-----------|
+| `border` | Early iterations | Annular band 1–2.5σ from nearest Gaussian (controlled by `--border_inner_ld` / `--border_outer_ld`) |
+| `frontier` | Later iterations | Lowest max log-density across all Gaussians (farthest uncovered regions) |
+| `auto` | Fully automatic | `border` for iter < `--auto_switch_iter`, then `frontier` |
+
+---
+
+## Evaluation Protocol
+
+`pec_eval_expert_frontier.py` (Isaac Sim subprocess):
+- Spawns F frontier designs as F parallel environments.
+- Runs `--num_episodes` episodes; curriculum manager adjusts obstacle height.
+- Records the **final** curriculum level (not max) per environment after all
+  episodes complete — this is the expert's score for that design.
+
+PEC oracle score for a design = `max(score_E0, score_E1, ..., score_EK)`.
+
+---
+
+## Visualisation Conventions
+
+- X-axis: **spcf**, Y-axis: **GCR** (always, in all plots).
+- `pec_visualize.py` uses `origin="lower"` for the heatmap — do **not**
+  apply `np.flipud` to the image.
+- Heatmap alpha fades smoothly from log-density; no hard binary coverage mask.
+- `--itr N` reads Gaussian parameters from `state["history"][N]`, not the
+  current `state["experts"]`. Call visualise **after** `pec_refit_gaussians.py`
+  to see the state that was active during iteration N's frontier evaluation.
+
+---
+
+## Log Directory Layout
+
+```
+logs/pec/<run_name>/
+├── pec_state.json
+├── all_expert_designs.json        # compiled designs for baseline eval
+├── frontier_evals/
+│   ├── iter_0/
+│   │   ├── candidates.json
+│   │   ├── scores.json
+│   │   ├── assignments.json       # written by pec_refit_gaussians.py
+│   │   └── expert_<k>_results.json
+│   └── iter_N/ ...
+└── plots/
+```
+
+All scripts default `--log_root` to `logs/pec` (relative to
+`ballu_isclb_extension/`). Run all commands from that directory.
