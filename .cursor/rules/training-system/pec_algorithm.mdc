@@ -22,7 +22,9 @@ Kinematic parameters (femur/tibia lengths) are **not** partitioned.
 
 ```
 INIT     pec_init.py
-           seed K Gaussians, assign N_init designs per expert
+           seed K Gaussians (grid / stochastic_fps)
+           optionally calibrate sigma to a target initial coverage
+           assign N_init designs per expert
            write pec_state.json
 
 LOOP
@@ -55,6 +57,11 @@ Central source of truth. All scripts read/write this file.
   "run_name":     "my_run",
   "iteration":    3,
   "usd_rel_path": "morphologies/.../robot.usd",     // injected as BALLU_USD_REL_PATH
+  "init_strategy": "stochastic_fps",
+  "init_seed": 123,
+  "init_sigma_scale": 0.412,
+  "init_target_coverage": 0.817,
+  "init_realized_coverage": 0.818,
   "design_space": { "GCR": [0.75, 0.89], "spcf": [0.001, 0.010] },
   "experts": [
     {
@@ -81,6 +88,8 @@ Key invariants:
 - `checkpoint` holds the **absolute** path to `model_best.pt`.
 - `history` is append-only; `pec_refit_gaussians.py` writes the snapshot
   **before** overwriting `mu`/`sigma`.
+- `init_seed` and `init_strategy` should be preserved in state for seed-sweep
+  analysis and reproducibility.
 
 ---
 
@@ -88,7 +97,7 @@ Key invariants:
 
 | Script | Step | Key args |
 |--------|------|----------|
-| `pec_init.py` | 0 — Bootstrap | `--run_name`, `--K`, `--GCR_range`, `--spcf_range`, `--sigma_scale`, `--centers`, `--usd_rel_path` |
+| `pec_init.py` | 0 — Bootstrap | `--run_name`, `--K`, `--GCR_range`, `--spcf_range`, `--sigma_scale`, `--centers`, `--init_strategy`, `--init_seed`, `--target_init_coverage`, `--usd_rel_path` |
 | `pec_train_expert.py` | 1 — Train | `--run_name`, `--expert_id`, `--max_iterations`, `--num_envs`, `--dl` |
 | `pec_evaluate_frontier.py` | 2 — Orchestrate eval | `--run_name`, `--F`, `--sampling_mode`, `--num_episodes` |
 | `pec_eval_expert_frontier.py` | 2 — Isaac subprocess | `--checkpoint_path`, `--frontier_file`, `--output` |
@@ -114,6 +123,26 @@ PEC requires a different (GCR, spcf) per parallel environment:
   `GCR_values` (per-env list) > `GCR_range` (uniform) > `GCR` (scalar).
 
 Do **not** revert to uniform `GCR_range` sampling when per-env values are needed.
+
+---
+
+## Initialisation Modes
+
+`pec_init.py` supports three center initialisation paths:
+
+| Mode | Behaviour | When to use |
+|------|-----------|-------------|
+| `grid` | Legacy square-ish grid truncated to K centers | Backward-compatible baseline |
+| `stochastic_fps` | Boundary-aware, seed-controlled farthest-point sampling in normalized `(GCR, spcf)` space | Recommended for odd K or seed-sweep studies |
+| `--centers ...` | Explicit manual center list | Hand-crafted ablations |
+
+For `stochastic_fps`, if `--target_init_coverage` is omitted, the default target
+is the legacy grid coverage at the same `K` and `sigma_scale`. `pec_init.py`
+then calibrates `sigma_scale` on a fixed MC point set so different seeds can
+move the centers while keeping initial coverage approximately constant.
+
+Do not assume the user-provided `--sigma_scale` is the realised value when
+coverage calibration is enabled. Read `state["init_sigma_scale"]`.
 
 ---
 

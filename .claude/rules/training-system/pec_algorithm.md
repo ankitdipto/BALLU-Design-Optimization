@@ -16,7 +16,9 @@ Kinematic parameters (femur/tibia lengths) are **not** partitioned by PEC.
 
 ```
 INIT     pec_init.py
-           seed K Gaussians, assign N_init designs per expert
+           seed K Gaussians (grid / stochastic_fps)
+           optionally calibrate sigma to a target initial coverage
+           assign N_init designs per expert
            write pec_state.json
 
 LOOP  (orchestrated by pec_run.py)
@@ -90,6 +92,11 @@ Central source of truth.  All scripts read/write this file.
   "run_name":     "my_run",
   "iteration":    3,               // completed PEC iterations
   "usd_rel_path": "morphologies/.../robot.usd",
+  "init_strategy": "stochastic_fps",
+  "init_seed": 123,
+  "init_sigma_scale": 0.412,
+  "init_target_coverage": 0.817,
+  "init_realized_coverage": 0.818,
   "design_space": { "GCR": [0.75, 0.89], "spcf": [0.001, 0.010] },
   "experts": [
     {
@@ -121,6 +128,8 @@ Central source of truth.  All scripts read/write this file.
   (replaces brittle path-pattern matching)
 - The initial N_init designs stay in `expert["designs"]` forever — intentional
   anchor preventing experts from migrating far from their seed region
+- `init_seed` and `init_strategy` should be preserved so stochastic
+  initialisations remain reproducible and analyzable
 
 ---
 
@@ -129,7 +138,7 @@ Central source of truth.  All scripts read/write this file.
 | Script | Step | Key args |
 |--------|------|----------|
 | `pec_run.py` | Orchestrator | `--run_name`, `--config`, `--max_pec_iterations`, `--K`, `--max_iterations`, `--max_iterations_iter0` |
-| `pec_init.py` | 0 — Bootstrap | `--run_name`, `--K`, `--GCR_range`, `--spcf_range`, `--sigma_scale`, `--centers`, `--usd_rel_path` |
+| `pec_init.py` | 0 — Bootstrap | `--run_name`, `--K`, `--GCR_range`, `--spcf_range`, `--sigma_scale`, `--centers`, `--init_strategy`, `--init_seed`, `--target_init_coverage`, `--usd_rel_path` |
 | `pec_train_expert.py` | 1 — Train | `--run_name`, `--expert_id`, `--max_iterations`, `--num_envs`, `--dl` |
 | `pec_evaluate_frontier.py` | 2 — Orchestrate eval | `--run_name`, `--F`, `--sampling_mode`, `--num_episodes`, `--start_difficulty` |
 | `pec_eval_expert_frontier.py` | 2 — Isaac subprocess | `--checkpoint_path`, `--frontier_file`, `--output` |
@@ -148,14 +157,29 @@ from `state["usd_rel_path"]`.  **Never pass it manually.**
 std_d = sigma_scale × range_d / sqrt(K)
 ```
 
+Automatic center placement modes:
+
+| Mode | Behaviour | Use when |
+|------|-----------|----------|
+| `grid` | Legacy square-ish grid truncated to K centers | Backward-compatible baseline |
+| `stochastic_fps` | Boundary-aware, seed-controlled farthest-point sampling in normalized `(GCR, spcf)` space | Recommended for odd K and seed sweeps |
+
+`--centers` overrides either automatic mode with explicit `[GCR, spcf]` pairs.
+
+If `--target_init_coverage` is set, `pec_init.py` calibrates `sigma_scale` by a
+short 1D search on a fixed MC point set and stores the realised value in
+`state["init_sigma_scale"]`.
+
+If `--init_strategy stochastic_fps` is used and `--target_init_coverage` is
+omitted, the default target is the legacy grid coverage at the same `K` and
+user-provided `sigma_scale`. This lets seed sweeps move the initial centers
+without materially changing the initial coverage budget.
+
 | sigma_scale | ~σ as % of range | Overlap | Use when |
-|------------|-----------------|---------|----------|
-| 0.10 | 7% | ~zero | Very narrow specialists (default) |
+|------------|------------------|---------|----------|
+| 0.10 | 7% | ~zero | Very narrow specialists |
 | 0.15 | 11% | small | Moderate separation |
 | 0.20 | 14% | moderate | Broad initial regions |
-
-`--centers` overrides the automatic grid placement with explicit `[GCR, spcf]`
-pairs (length K).
 
 ---
 

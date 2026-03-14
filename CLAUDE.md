@@ -81,7 +81,8 @@ it left off.
 # 0  Initialise
 python scripts/pec/pec_init.py --run_name my_run --K 2 \
     --GCR_range 0.75 0.89 --spcf_range 0.001 0.010 \
-    --sigma_scale 0.10 --N_init 50 --usd_rel_path morphologies/.../robot.usd
+    --sigma_scale 0.10 --N_init 50 --usd_rel_path morphologies/.../robot.usd \
+    --init_strategy stochastic_fps --init_seed 123
 
 # 1  Train expert k at iteration n
 python scripts/pec/pec_train_expert.py \
@@ -108,6 +109,13 @@ python scripts/pec/pec_eval_final.py \
     --designs_file  logs/pec/my_run/test_1000_uniform.json \
     --num_episodes  16 --start_difficulty 22 --headless
 ```
+
+`pec_init.py` supports both legacy `grid` seeding and stochastic
+`stochastic_fps` seeding. When `stochastic_fps` is used without an explicit
+`--target_init_coverage`, it calibrates the initial sigma to match the legacy
+grid's MC coverage at the same `K` and `sigma_scale`, and stores the init
+metadata (`init_strategy`, `init_seed`, `init_sigma_scale`,
+`init_target_coverage`, `init_realized_coverage`) in `pec_state.json`.
 
 → Full algorithm details: [.claude/rules/training-system/pec_algorithm.md](.claude/rules/training-system/pec_algorithm.md)
 
@@ -172,6 +180,7 @@ BALLU morphologies (URDF → USD) are managed via:
 - `pec_state.json["designs"]` stores `[GCR, spcf]` pairs (not dicts) — index as `d[0]`, `d[1]`
 - `checkpoint` in state is always an **absolute** path to `model_best.pt`
 - `state["history"]` is **append-only**; written *before* refit overwrites mu/sigma
+- Preserve `init_strategy`, `init_seed`, and the other `init_*` metadata in state for reproducible seed-sweep experiments
 - PEC score = **final** curriculum level after last episode reset (not running max)
 - Visualisation: X = spcf, Y = GCR; `origin="lower"`; **no** `np.flipud`
 - `BALLU_USD_REL_PATH` is always injected from `state["usd_rel_path"]` — never pass manually
