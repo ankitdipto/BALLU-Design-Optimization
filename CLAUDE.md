@@ -51,7 +51,7 @@ BALLU_Project/
 - **Key morphology parameters** encoded in every observation:
   - `GCR` (Gravity Compensation Ratio) — range `[0.75, 0.89]`
   - `spcf` (Spring Coefficient) — range `[0.001, 0.010]`
-- Kinematic params (femur/tibia lengths) are **not** used as RL design axes
+- Kinematic params (femur/tibia lengths) are **not** used as RL design axes in 2D PEC; in 3D PEC `leg_length` (= femur = tibia) becomes a third partitioned axis
 
 → Full details: [.claude/rules/training-system/training_workflow.md](.claude/rules/training-system/training_workflow.md)
 
@@ -60,7 +60,8 @@ BALLU_Project/
 ## 4 · PEC (Progressive Expert Coverage) — quick reference
 
 PEC trains **K specialist PPO policies**, each owning a Gaussian region of
-the GCR × spcf design space.
+the design space.  Two modes: **2D** (GCR × spcf, default) and **3D**
+(GCR × spcf × leg_length, enabled by `leg_range` in config or CLI).
 
 ### Automated run (recommended)
 
@@ -78,11 +79,17 @@ it left off.
 ### Manual steps (one-off / debugging)
 
 ```bash
-# 0  Initialise
+# 0  Initialise (2D)
 python scripts/pec/pec_init.py --run_name my_run --K 2 \
     --GCR_range 0.75 0.89 --spcf_range 0.001 0.010 \
     --sigma_scale 0.10 --N_init 50 --usd_rel_path morphologies/.../robot.usd \
     --init_strategy stochastic_fps --init_seed 123
+
+# 0  Initialise (3D — add leg_range, omit usd_rel_path)
+python scripts/pec/pec_init.py --run_name my_run_3d --K 4 \
+    --GCR_range 0.75 0.89 --spcf_range 0.001 0.010 --leg_range 0.20 0.50 \
+    --sigma_scale 0.10 --N_init 50 \
+    --init_strategy stochastic_fps --init_seed 42
 
 # 1  Train expert k at iteration n
 python scripts/pec/pec_train_expert.py \
@@ -104,9 +111,16 @@ python scripts/pec/pec_visualize.py --run_name my_run \
 ### Final evaluation on a held-out designs file
 
 ```bash
+# 2D
 python scripts/pec/pec_eval_final.py \
     --run_name      my_run \
     --designs_file  logs/pec/my_run/test_1000_uniform.json \
+    --num_episodes  16 --start_difficulty 22 --headless
+
+# 3D (designs must include "leg" field; USDs generated automatically)
+python scripts/pec/pec_eval_final.py \
+    --run_name      my_run_3d \
+    --designs_file  logs/pec/my_run_3d/test_1000_uniform.json \
     --num_episodes  16 --start_difficulty 22 --headless
 ```
 
@@ -177,11 +191,14 @@ BALLU morphologies (URDF → USD) are managed via:
 
 ## 8 · Key invariants — do not violate
 
-- `pec_state.json["designs"]` stores `[GCR, spcf]` pairs (not dicts) — index as `d[0]`, `d[1]`
+- `pec_state.json["designs"]` stores `[GCR, spcf]` pairs (2D) or `[GCR, spcf, leg]` triples (3D) — never dicts; index as `d[0]`, `d[1]`, `d[2]`
 - `checkpoint` in state is always an **absolute** path to `model_best.pt`
 - `state["history"]` is **append-only**; written *before* refit overwrites mu/sigma
 - Preserve `init_strategy`, `init_seed`, and the other `init_*` metadata in state for reproducible seed-sweep experiments
 - PEC score = **final** curriculum level after last episode reset (not running max)
-- Visualisation: X = spcf, Y = GCR; `origin="lower"`; **no** `np.flipud`
-- `BALLU_USD_REL_PATH` is always injected from `state["usd_rel_path"]` — never pass manually
+- Visualisation 2D: X = spcf, Y = GCR; `origin="lower"`; **no** `np.flipud`
+- Visualisation 3D: 1×3 marginal subplots — (spcf, GCR), (leg, GCR), (leg, spcf)
+- **2D**: `BALLU_USD_REL_PATH` is always injected from `state["usd_rel_path"]` — never pass manually
+- **3D**: `BALLU_USD_ORDER_FILE` (ordered JSON list of abs USD paths) replaces `BALLU_USD_REL_PATH` — injected by orchestrators, never pass manually; `usd_rel_path` absent from state
+- In 3D training, only `N_init` unique leg USDs are generated per expert per iteration; GCR/spcf vary freely across all `num_envs` envs
 - Single GPU: all Isaac Sim subprocesses run **sequentially**
