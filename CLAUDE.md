@@ -197,7 +197,7 @@ BALLU morphologies (URDF → USD) are managed via:
 - Preserve `init_strategy`, `init_seed`, and the other `init_*` metadata in state for reproducible seed-sweep experiments
 - PEC score = **final** curriculum level after last episode reset (not running max)
 - Visualisation 2D: X = spcf, Y = GCR; `origin="lower"`; **no** `np.flipud`
-- Visualisation 3D: 1×3 marginal subplots — (spcf, GCR), (leg, GCR), (leg, spcf)
+- Visualisation 3D: single 3D axes — X = spcf, Y = leg, Z = GCR; wireframe ellipsoids per expert
 - **2D**: `BALLU_USD_REL_PATH` is always injected from `state["usd_rel_path"]` — never pass manually
 - **3D**: `BALLU_USD_ORDER_FILE` (ordered JSON list of abs USD paths) replaces `BALLU_USD_REL_PATH` — injected by orchestrators, never pass manually; `usd_rel_path` absent from state
 - In 3D training, only `N_init` unique leg USDs are generated per expert per iteration; GCR/spcf vary freely across all `num_envs` envs

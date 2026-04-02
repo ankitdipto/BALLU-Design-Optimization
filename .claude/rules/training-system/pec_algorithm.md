@@ -412,16 +412,10 @@ Outputs to `logs/pec/<run_name>/final_eval/<designs_stem>/`:
 - `origin="lower"` — do **not** apply `np.flipud`
 - Heatmap alpha fades from log-density; no hard binary coverage mask
 
-**3D mode** — 1 × 3 marginal subplot figure:
-
-| Subplot | X-axis | Y-axis | Gaussian shown |
-|---------|--------|--------|----------------|
-| Left | spcf | GCR | marginal of axes 1 (spcf) × 0 (GCR) |
-| Centre | leg | GCR | marginal of axes 2 (leg) × 0 (GCR) |
-| Right | leg | spcf | marginal of axes 2 (leg) × 1 (spcf) |
-
-Each subplot uses the 2D marginal of the diagonal 3×3 covariance for the
-corresponding pair of axes.
+**3D mode** — single 3D axes (mpl_toolkits.mplot3d):
+- Axis mapping: X = spcf, Y = leg, Z = GCR
+- Each expert: 1σ solid wireframe ellipsoid + 2σ dashed wireframe + centre marker + design scatter
+- Frontier overlay as 3D star scatter (when `--itr` is given)
 
 `--itr N` reads from `state["history"][N]`, not current `state["experts"]`
 → visualise **after** refit to see the state active during iteration N's eval
