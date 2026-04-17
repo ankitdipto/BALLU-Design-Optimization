@@ -14,7 +14,7 @@
         "terminal.ansiYellow": "#ffc107",
         "terminal.ansiBrightYellow": "#c7be88"
     },
-    "editor.fontSize": 11.2,
+    "editor.fontSize": 10.7,
     "terminal.integrated.fontSize": 11.5,
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda",
